@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-kit/kit/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -43,9 +42,6 @@ func notificationServerCommand() *cobra.Command {
 
 func listenForNotifications(c *cobra.Command, args []string) {
 	relay, err := NewDBusHTTPRelay(
-		RelayLog(
-			log.With(log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr)),
-				"ts", log.DefaultTimestamp)),
 		RelayHost(viper.GetString("host")),
 		RelayPort(viper.GetInt("port")),
 		RelayDest(viper.GetString("dest")),
