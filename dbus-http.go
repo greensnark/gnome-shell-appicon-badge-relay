@@ -6,12 +6,15 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-kit/kit/log"
 	"github.com/godbus/dbus"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 )
 
 type DBusHTTPRelay struct {
+	log log.Logger
+
 	host string
 	port int
 
@@ -64,6 +67,14 @@ func (d *DBusHTTPRelay) raiseDBusSignal(windowID string, notification dbusNotifi
 	return call.Err
 }
 
+func resultText(err error) string {
+	if err == nil {
+		return "OK"
+	}
+
+	return "err:" + err.Error()
+}
+
 func (d *DBusHTTPRelay) setWindowNotifications(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	badRequest := func(message string) {
 		http.Error(w, message, http.StatusBadRequest)
@@ -81,7 +92,11 @@ func (d *DBusHTTPRelay) setWindowNotifications(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := d.raiseDBusSignal(windowID, notificationRequest); err != nil {
+	err := d.raiseDBusSignal(windowID, notificationRequest)
+	d.log.Log("windowID", windowID, "label", notificationRequest.Label, "color", notificationRequest.Color,
+		"result", resultText(err))
+
+	if err != nil {
 		http.Error(w, fmt.Sprint("unable to raise signal:", err), http.StatusInternalServerError)
 		return
 	}
@@ -92,16 +107,21 @@ func (d *DBusHTTPRelay) setWindowNotifications(w http.ResponseWriter, r *http.Re
 type RelaySetting func(*DBusHTTPRelay)
 
 func NewDBusHTTPRelay(settings ...RelaySetting) (*DBusHTTPRelay, error) {
-	relay := &DBusHTTPRelay{}
+	relay := &DBusHTTPRelay{
+		log: log.NewNopLogger(),
+	}
 	for _, setting := range settings {
 		setting(relay)
 	}
-
 	if err := relay.configError(); err != nil {
 		return nil, err
 	}
 
 	return relay, nil
+}
+
+func RelayLog(log log.Logger) RelaySetting {
+	return func(d *DBusHTTPRelay) { d.log = log }
 }
 
 func RelayDestinationBus(bus *dbus.Conn) RelaySetting {
